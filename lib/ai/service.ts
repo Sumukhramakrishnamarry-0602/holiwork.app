@@ -3,14 +3,10 @@ import type { AIChatRequest, AIDailyBriefRequest, AIServerReply } from "@/lib/ai
 
 async function getAuthHeaders() {
   const user = getFirebaseAuth().currentUser;
-  if (!user) {
-    throw new Error("Authentication required.");
-  }
-
-  const token = await user.getIdToken();
+  if (!user) throw new Error("Authentication required.");
   return {
     "Content-Type": "application/json",
-    Authorization: `Bearer ${token}`,
+    Authorization: `Bearer ${await user.getIdToken()}`,
   };
 }
 
@@ -20,14 +16,8 @@ async function postJSON<TResponse>(url: string, body: object): Promise<TResponse
     headers: await getAuthHeaders(),
     body: JSON.stringify(body),
   });
-
   const payload = (await response.json()) as TResponse & { error?: string };
-
-  if (!response.ok) {
-    const message = (payload as { error?: string }).error || "AI request failed.";
-    throw new Error(message);
-  }
-
+  if (!response.ok) throw new Error(payload.error || "Request failed.");
   return payload;
 }
 
@@ -50,5 +40,9 @@ export const aiService = {
   },
   extractReminder(input: { text: string; nowIso: string; timezone: string }) {
     return postJSON<{ title: string; description: string; reminderTime: string }>("/api/ai/extract-reminder", input);
+  },
+  executeAction(action: AIServerReply["action"]) {
+    if (!action || action.type === "none") return Promise.resolve({ type: "none" as const, success: true });
+    return postJSON<{ type: string; success: boolean }>("/api/ai/action", action);
   },
 };
