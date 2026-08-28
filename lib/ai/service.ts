@@ -1,9 +1,23 @@
+import { getFirebaseAuth } from "@/lib/firebase/client";
 import type { AIChatRequest, AIDailyBriefRequest, AIServerReply } from "@/lib/ai/types";
+
+async function getAuthHeaders() {
+  const user = getFirebaseAuth().currentUser;
+  if (!user) {
+    throw new Error("Authentication required.");
+  }
+
+  const token = await user.getIdToken();
+  return {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${token}`,
+  };
+}
 
 async function postJSON<TResponse>(url: string, body: object): Promise<TResponse> {
   const response = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: await getAuthHeaders(),
     body: JSON.stringify(body),
   });
 
