@@ -3,6 +3,7 @@
 import { EmptyState } from "@/components/common/EmptyState";
 import { Modal } from "@/components/common/Modal";
 import { TaskForm } from "@/components/tasks/TaskForm";
+import { QuickCapture } from "@/components/tasks/QuickCapture";
 import { useAuthUser } from "@/lib/hooks/useAuthUser";
 import { createTask, deleteTask, subscribeTasks, updateTask } from "@/lib/services/tasks";
 import type { TaskItem, TaskPriority } from "@/lib/types";
@@ -62,6 +63,8 @@ export default function TasksPage() {
 
   return (
     <div className="content">
+      <QuickCapture onCreated={() => setView("All")} />
+
       <section className="card">
         <div className="row space-between">
           <h1>Tasks</h1>
