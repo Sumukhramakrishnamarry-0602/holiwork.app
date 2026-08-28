@@ -1,0 +1,40 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function unchangedOwner() {
+      return request.resource.data.userId == resource.data.userId;
+    }
+
+    match /tasks/{taskId} {
+      allow create: if isOwner(request.resource.data.userId);
+      allow read, delete: if isOwner(resource.data.userId);
+      allow update: if isOwner(resource.data.userId) && unchangedOwner();
+    }
+
+    match /events/{eventId} {
+      allow create: if isOwner(request.resource.data.userId);
+      allow read, delete: if isOwner(resource.data.userId);
+      allow update: if isOwner(resource.data.userId) && unchangedOwner();
+    }
+
+    match /reminders/{reminderId} {
+      allow create: if isOwner(request.resource.data.userId);
+      allow read, delete: if isOwner(resource.data.userId);
+      allow update: if isOwner(resource.data.userId) && unchangedOwner();
+    }
+
+    match /aiConversations/{conversationId} {
+      allow create: if isOwner(request.resource.data.userId) && conversationId == request.auth.uid;
+      allow read, delete: if isSignedIn() && conversationId == request.auth.uid;
+      allow update: if isSignedIn() && conversationId == request.auth.uid && unchangedOwner();
+    }
+  }
+}
