@@ -3,9 +3,9 @@
 import { AssistantPanel } from "@/components/assistant/AssistantPanel";
 import { useAuthUser } from "@/lib/hooks/useAuthUser";
 import { saveConversation, subscribeConversation, clearConversation } from "@/lib/services/aiConversations";
-import { createEvent, subscribeEvents } from "@/lib/services/events";
-import { createReminder, subscribeReminders } from "@/lib/services/reminders";
-import { createTask, subscribeTasks } from "@/lib/services/tasks";
+import { subscribeEvents } from "@/lib/services/events";
+import { subscribeReminders } from "@/lib/services/reminders";
+import { subscribeTasks } from "@/lib/services/tasks";
 import type { CalendarEvent, ChatMessage, ReminderItem, TaskItem } from "@/lib/types";
 import { currentTimezone } from "@/lib/utils/date";
 import { useEffect, useState } from "react";
@@ -45,37 +45,10 @@ export default function AskPage() {
   async function runAction(action: { type: string; payload?: Record<string, string> }) {
     if (!user || !action.payload) return;
 
-    if (action.type === "createTask") {
-      await createTask(user.uid, {
-        title: action.payload.title || "Untitled task",
-        description: action.payload.description || "",
-        dueDate: action.payload.dueDate || "",
-        dueTime: action.payload.dueTime || "",
-        priority: (action.payload.priority as "Low" | "Medium" | "High") || "Medium",
-        category: action.payload.category || "General",
-      });
-      return;
-    }
-
-    if (action.type === "createEvent") {
-      await createEvent(user.uid, {
-        title: action.payload.title || "Untitled event",
-        description: action.payload.description || "",
-        startTime: action.payload.startTime || new Date().toISOString(),
-        endTime: action.payload.endTime || new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-        location: action.payload.location || "",
-      });
-      return;
-    }
-
-    if (action.type === "createReminder") {
-      await createReminder(user.uid, {
-        title: action.payload.title || "Untitled reminder",
-        description: action.payload.description || "",
-        reminderTime: action.payload.reminderTime || new Date().toISOString(),
-        completed: false,
-      });
-    }
+    await aiService.executeAction({
+      type: action.type as "createTask" | "createEvent" | "createReminder",
+      payload: action.payload as never,
+    });
   }
 
   async function clearAll() {
