@@ -47,7 +47,7 @@ export function AssistantPanel({ messages, context, onSendMessage, onReceiveMess
       await onReceiveMessage(assistantMessage);
 
       if (reply.action && reply.action.type !== "none") {
-        await onAction(reply.action as { type: string; payload?: Record<string, string> });
+        await onAction(reply.action);
       }
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "Failed to send message.");
