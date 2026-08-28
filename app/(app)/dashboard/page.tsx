@@ -4,6 +4,7 @@ import { EmptyState } from "@/components/common/EmptyState";
 import { Modal } from "@/components/common/Modal";
 import { DailyBriefCard } from "@/components/dashboard/DailyBriefCard";
 import { FocusNowCard } from "@/components/dashboard/FocusNowCard";
+import { DayPlanCard } from "@/components/dashboard/DayPlanCard";
 import { EventForm } from "@/components/events/EventForm";
 import { ReminderForm } from "@/components/reminders/ReminderForm";
 import { TaskForm } from "@/components/tasks/TaskForm";
@@ -14,6 +15,7 @@ import { createReminder, subscribeReminders } from "@/lib/services/reminders";
 import { createTask, subscribeTasks, updateTask } from "@/lib/services/tasks";
 import type { CalendarEvent, ReminderItem, TaskItem } from "@/lib/types";
 import { getFocusRecommendation } from "@/lib/productivity/focus";
+import { buildDayPlan } from "@/lib/productivity/planner";
 import { currentTimezone, getGreeting, sortEventsByStart, sortTasksByDue, toLocalLabel } from "@/lib/utils/date";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
@@ -69,6 +71,7 @@ export default function DashboardPage() {
 
   const completedCount = tasks.filter((task) => task.completed).length;
   const focusRecommendation = useMemo(() => getFocusRecommendation(tasks, events), [tasks, events]);
+  const dayPlan = useMemo(() => buildDayPlan(tasks, events), [tasks, events]);
 
   async function refreshBrief() {
     if (!user) return;
@@ -111,6 +114,8 @@ export default function DashboardPage() {
       <DailyBriefCard brief={brief} loading={briefLoading} error={briefError} onRefresh={refreshBrief} />
 
       <FocusNowCard recommendation={focusRecommendation} />
+
+      <DayPlanCard blocks={dayPlan} />
 
       {error && <p className="status error">{error}</p>}
 
