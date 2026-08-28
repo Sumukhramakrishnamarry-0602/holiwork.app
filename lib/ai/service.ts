@@ -20,6 +20,9 @@ export const aiService = {
   generatePlan(input: { goal: string; nowIso: string; timezone: string }) {
     return postJSON<{ blocks: unknown[]; unscheduled: unknown[]; summary: string; ai: AIPlanResponse }>("/api/ai/plan", input);
   },
+  applyPlan(taskIds: string[]) {
+    return postJSON<{ success: boolean; taskIds: string[] }>("/api/ai/plan/apply", { taskIds });
+  },
   extractTask(input: { text: string; nowIso: string; timezone: string }) {
     return postJSON<{ title: string; description: string; dueDate: string; dueTime: string; priority: "Low" | "Medium" | "High"; category: string }>("/api/ai/extract-task", input);
   },
