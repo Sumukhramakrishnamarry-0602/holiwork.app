@@ -12,12 +12,14 @@ export function AdaptivePlanCard({ tasks }: { tasks: TaskItem[] }) {
   const [message, setMessage] = useState("");
   const [priorities, setPriorities] = useState<Priority[]>([]);
   const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [applied, setApplied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const taskById = new Map(tasks.map((task) => [task.id, task]));
 
   async function plan() {
     if (!goal.trim()) return;
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setApplied(false);
     try {
       const result = await aiService.generatePlan({ goal: goal.trim(), nowIso: new Date().toISOString(), timezone: currentTimezone() });
       setMessage(result.ai.message);
@@ -25,6 +27,17 @@ export function AdaptivePlanCard({ tasks }: { tasks: TaskItem[] }) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not build your plan.");
     } finally { setLoading(false); }
+  }
+
+  async function applyPlan() {
+    if (!priorities.length) return;
+    setApplying(true); setError(null);
+    try {
+      await aiService.applyPlan(priorities.map((item) => item.taskId));
+      setApplied(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not apply your plan.");
+    } finally { setApplying(false); }
   }
 
   return (
@@ -48,6 +61,9 @@ export function AdaptivePlanCard({ tasks }: { tasks: TaskItem[] }) {
               </div>
             ) : null;
           })}
+          <div className="row">
+            <button className="primary-btn" disabled={applying || applied} onClick={() => void applyPlan()}>{applied ? "Plan applied" : applying ? "Applying..." : "Apply plan"}</button>
+          </div>
         </div>
       )}
     </section>
