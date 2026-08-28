@@ -17,3 +17,8 @@ export interface AIServerReply {
 export interface AIDailyBriefRequest {
   context: AssistantContext;
 }
+
+export interface AIPlanResponse {
+  message: string;
+  priorities: Array<{ taskId: string; reason: string }>;
+}
