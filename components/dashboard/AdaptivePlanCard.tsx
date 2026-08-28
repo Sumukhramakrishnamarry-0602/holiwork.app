@@ -2,16 +2,18 @@
 
 import { aiService } from "@/lib/ai/service";
 import { currentTimezone } from "@/lib/utils/date";
+import type { TaskItem } from "@/lib/types";
 import { useState } from "react";
 
 interface Priority { taskId: string; reason: string }
 
-export function AdaptivePlanCard() {
+export function AdaptivePlanCard({ tasks }: { tasks: TaskItem[] }) {
   const [goal, setGoal] = useState("");
   const [message, setMessage] = useState("");
   const [priorities, setPriorities] = useState<Priority[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const taskById = new Map(tasks.map((task) => [task.id, task]));
 
   async function plan() {
     if (!goal.trim()) return;
@@ -37,12 +39,15 @@ export function AdaptivePlanCard() {
       {message && <p>{message}</p>}
       {priorities.length > 0 && (
         <div>
-          {priorities.map((item, index) => (
-            <div className="event-item" key={item.taskId}>
-              <strong>{index + 1}. {item.taskId}</strong>
-              <p className="status">{item.reason}</p>
-            </div>
-          ))}
+          {priorities.map((item, index) => {
+            const task = taskById.get(item.taskId);
+            return task ? (
+              <div className="event-item" key={item.taskId}>
+                <strong>{index + 1}. {task.title}</strong>
+                <p className="status">{item.reason}</p>
+              </div>
+            ) : null;
+          })}
         </div>
       )}
     </section>
