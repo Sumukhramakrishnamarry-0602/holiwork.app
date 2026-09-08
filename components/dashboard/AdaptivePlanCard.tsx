@@ -6,11 +6,13 @@ import type { TaskItem } from "@/lib/types";
 import { useState } from "react";
 
 interface Priority { taskId: string; reason: string }
+interface PlanBlock { type: "task" | "event"; id: string; title: string; start: string; end: string; reason?: string }
 
 export function AdaptivePlanCard({ tasks }: { tasks: TaskItem[] }) {
   const [goal, setGoal] = useState("");
   const [message, setMessage] = useState("");
   const [priorities, setPriorities] = useState<Priority[]>([]);
+  const [blocks, setBlocks] = useState<PlanBlock[]>([]);
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [applied, setApplied] = useState(false);
@@ -24,16 +26,20 @@ export function AdaptivePlanCard({ tasks }: { tasks: TaskItem[] }) {
       const result = await aiService.generatePlan({ goal: goal.trim(), nowIso: new Date().toISOString(), timezone: currentTimezone() });
       setMessage(result.ai.message);
       setPriorities(result.ai.priorities);
+      setBlocks(result.blocks as PlanBlock[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not build your plan.");
     } finally { setLoading(false); }
   }
 
   async function applyPlan() {
-    if (!priorities.length) return;
+    const taskBlocks = blocks
+      .filter((block) => block.type === "task" && taskById.has(block.id))
+      .map((block) => ({ taskId: block.id, start: block.start, end: block.end }));
+    if (!taskBlocks.length) return;
     setApplying(true); setError(null);
     try {
-      await aiService.applyPlan(priorities.map((item) => item.taskId));
+      await aiService.applyPlan(taskBlocks);
       setApplied(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not apply your plan.");
@@ -50,19 +56,21 @@ export function AdaptivePlanCard({ tasks }: { tasks: TaskItem[] }) {
       </div>
       {error && <p className="status error">{error}</p>}
       {message && <p>{message}</p>}
-      {priorities.length > 0 && (
+      {blocks.length > 0 && (
         <div>
-          {priorities.map((item, index) => {
-            const task = taskById.get(item.taskId);
+          <p className="status">Suggested schedule</p>
+          {blocks.filter((block) => block.type === "task").map((block) => {
+            const task = taskById.get(block.id);
             return task ? (
-              <div className="event-item" key={item.taskId}>
-                <strong>{index + 1}. {task.title}</strong>
-                <p className="status">{item.reason}</p>
+              <div className="event-item" key={block.id}>
+                <strong>{task.title}</strong>
+                <p className="status">{new Date(block.start).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} – {new Date(block.end).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
               </div>
             ) : null;
           })}
+          {priorities.length > 0 && <p className="status">{priorities.length} AI-prioritized tasks.</p>}
           <div className="row">
-            <button className="primary-btn" disabled={applying || applied} onClick={() => void applyPlan()}>{applied ? "Plan applied" : applying ? "Applying..." : "Apply plan"}</button>
+            <button className="primary-btn" disabled={applying || applied} onClick={() => void applyPlan()}>{applied ? "Added to calendar" : applying ? "Adding..." : "Apply to calendar"}</button>
           </div>
         </div>
       )}
