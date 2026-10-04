@@ -6,6 +6,7 @@ import { DailyBriefCard } from "@/components/dashboard/DailyBriefCard";
 import { FocusNowCard } from "@/components/dashboard/FocusNowCard";
 import { DayPlanCard } from "@/components/dashboard/DayPlanCard";
 import { AdaptivePlanCard } from "@/components/dashboard/AdaptivePlanCard";
+import { SmartAlertsCard } from "@/components/dashboard/SmartAlertsCard";
 import { EventForm } from "@/components/events/EventForm";
 import { ReminderForm } from "@/components/reminders/ReminderForm";
 import { TaskForm } from "@/components/tasks/TaskForm";
@@ -72,6 +73,7 @@ export default function DashboardPage() {
       <AdaptivePlanCard tasks={tasks} events={events} />
       <FocusNowCard recommendation={focusRecommendation} />
       <DayPlanCard blocks={dayPlan} />
+      <SmartAlertsCard tasks={tasks} reminders={reminders} events={events} />
       {error && <p className="status error">{error}</p>}
       <section className="grid-2">
         <div className="card"><div className="row space-between"><h2>Today's Tasks</h2><button className="secondary-btn" onClick={() => setOpenTaskModal(true)}>+ Task</button></div><p className="status">{completedCount} of {tasks.length} tasks completed</p>{tasks.length === 0 ? <EmptyState title="No tasks yet." description="Add something you want to get done." /> : sortTasksByDue(tasks).slice(0, 6).map((task) => <div className="task-item" key={task.id}><div className="row space-between"><strong>{task.title}</strong><span className="badge">{task.priority}</span></div><p>{task.description}</p><p className="status">Due: {task.dueDate || "No due date"} {task.dueTime}</p><div className="row"><button className="secondary-btn" onClick={() => updateTask(task.id, { completed: !task.completed })}>{task.completed ? "Mark pending" : "Complete"}</button><Link className="ghost-btn" href="/tasks">Open/edit</Link></div></div>)}</div>
