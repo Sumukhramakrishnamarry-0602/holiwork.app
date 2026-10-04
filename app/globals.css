@@ -163,3 +163,29 @@ textarea { min-height: 80px; }
   .content { padding-bottom: 5rem; }
   .grid-2, .grid-3 { grid-template-columns: 1fr; }
 }
+
+
+.pwa-install-bar {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: min(31rem, calc(100vw - 2rem));
+  padding: 1rem;
+  color: #142b49;
+  background: #fffdf7;
+  border: 1px solid #ded8ca;
+  border-radius: 1rem;
+  box-shadow: 0 12px 36px rgba(20, 43, 73, 0.16);
+}
+.pwa-install-bar p { margin: .25rem 0 0; color: #667085; font-size: .88rem; }
+.pwa-install-bar .pwa-install-message { margin-top: .5rem; color: #142b49; }
+.pwa-install-note { position: fixed; bottom: .75rem; right: .75rem; z-index: 50; font-size: .85rem; color: #142b49; background: #fffdf7; border: 1px solid #ded8ca; border-radius: .75rem; padding: .65rem .85rem; }
+@media (max-width: 520px) {
+  .pwa-install-bar { left: .5rem; right: .5rem; bottom: .5rem; width: auto; align-items: flex-start; }
+  .pwa-install-bar .primary-btn { white-space: nowrap; }
+}
