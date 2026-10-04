@@ -33,21 +33,27 @@ export default function Home() {
   }, [authLoading, user, router]);
 
   useEffect(() => {
-    if (!user) return;
+    const currentUser = user;
+    if (!currentUser) return;
     let cancelled = false;
+
     async function loadTasks() {
       setLoadingTasks(true);
-      const snapshot = await getDocs(query(collection(db, 'tasks'), where('uid', '==', user.uid)));
+      const snapshot = await getDocs(query(collection(db, 'tasks'), where('uid', '==', currentUser.uid)));
       if (cancelled) return;
       if (snapshot.empty) {
-        const created = await Promise.all(starterTasks.map((task) => addDoc(collection(db, 'tasks'), { ...task, uid: user.uid })));
-        setTasks(created.map((item, index) => ({ id: item.id, ...starterTasks[index], uid: user.uid })));
+        const created = await Promise.all(starterTasks.map((task) => addDoc(collection(db, 'tasks'), { ...task, uid: currentUser.uid })));
+        if (cancelled) return;
+        setTasks(created.map((item, index) => ({ id: item.id, ...starterTasks[index], uid: currentUser.uid })));
       } else {
         setTasks(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as Task)));
       }
       setLoadingTasks(false);
     }
-    loadTasks().catch(() => setLoadingTasks(false));
+
+    loadTasks().catch(() => {
+      if (!cancelled) setLoadingTasks(false);
+    });
     return () => { cancelled = true; };
   }, [user]);
 
