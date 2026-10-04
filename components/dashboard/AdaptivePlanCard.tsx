@@ -110,7 +110,7 @@ export function AdaptivePlanCard({ tasks, events }: { tasks: TaskItem[]; events:
         </button>
       </div>
       {error && <p className="status error" role="alert">{error}</p>}
-      {planIsStale && (
+      {planIsStale && !applied && (
         <p className="status" role="status">
           Your tasks or calendar changed since this plan was created. Re-plan your day before applying it.
         </p>
