@@ -2,19 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { addDoc, collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from './auth-context';
 
 type Task = { id: string; title: string; subject: string; due: string; done: boolean; uid: string };
-
-const starterTasks = [
-  { title: 'Finish thermodynamics problem set', subject: 'Physics', due: 'Today · 6:00 PM', done: false },
-  { title: 'Review Boolean algebra notes', subject: 'Digital Logic', due: 'Today · 8:30 PM', done: false },
-  { title: 'Submit Java lab report', subject: 'Programming', due: 'Tomorrow · 10:00 AM', done: false },
-  { title: 'Read chapter 4', subject: 'Mathematics', due: 'Wed · 5:00 PM', done: true },
-];
+type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
 const navItems = ['Today', 'Homework', 'Wallet', 'Focus', 'Community'];
 
@@ -26,7 +20,7 @@ export default function Home() {
   const [ask, setAsk] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [newTask, setNewTask] = useState('');
-  const [loadingTasks, setLoadingTasks] = useState(true);
+  const [loadingTasks, setLoadingTasks] = useState(true);\n  const [appError, setAppError] = useState('');\n  const [aiReply, setAiReply] = useState('');\n  const [aiBusy, setAiBusy] = useState(false);\n  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login');
@@ -47,25 +41,10 @@ export default function Home() {
       setLoadingTasks(true);
       const snapshot = await getDocs(query(collection(db, 'tasks'), where('uid', '==', uid)));
       if (cancelled) return;
-      if (snapshot.empty) {
-        const created = await Promise.all(starterTasks.map((task) => addDoc(collection(db, 'tasks'), { ...task, uid })));
-        if (cancelled) return;
-        setTasks(created.map((item, index): Task => {
-          const starterTask = starterTasks[index];
-          if (!starterTask) {
-            throw new Error('A starter task is missing for a created task.');
-          }
-          return { id: item.id, title: starterTask.title, subject: starterTask.subject, due: starterTask.due, done: starterTask.done, uid };
-        }));
-      } else {
-        setTasks(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as Task)));
-      }
-      setLoadingTasks(false);
+      setTasks(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as Task)));\n      setAppError('');\n      setLoadingTasks(false);
     }
 
-    loadTasks().catch(() => {
-      if (!cancelled) setLoadingTasks(false);
-    });
+    loadTasks().catch(() => {\n      if (!cancelled) {\n        setLoadingTasks(false);\n        setAppError('Could not load your tasks. Check your connection and Firebase rules, then retry.');\n      }\n    });
     return () => { cancelled = true; };
   }, [user]);
 
@@ -76,15 +55,49 @@ export default function Home() {
     const nextDone = !task.done;
     setTasks((current) => current.map((item) => item.id === task.id ? { ...item, done: nextDone } : item));
     try { await updateDoc(doc(db, 'tasks', task.id), { done: nextDone }); }
-    catch { setTasks((current) => current.map((item) => item.id === task.id ? { ...item, done: task.done } : item)); }
+    catch {\n      setTasks((current) => current.map((item) => item.id === task.id ? { ...item, done: task.done } : item));\n      setAppError('Could not update that task. Please try again.');\n    }
   }
 
   async function addTask() {
     if (!newTask.trim() || !user) return;
     const data = { title: newTask.trim(), subject: 'Personal', due: 'Today', done: false, uid: user.uid };
-    const created = await addDoc(collection(db, 'tasks'), data);
-    setTasks((current) => [...current, { id: created.id, ...data }]);
-    setNewTask(''); setShowAdd(false);
+    try {\n      const created = await addDoc(collection(db, 'tasks'), data);\n      setTasks((current) => [...current, { id: created.id, ...data }]);\n      setNewTask(''); setShowAdd(false); setAppError('');\n    } catch {\n      setAppError('Could not save that task. Please try again.');\n    }
+  }
+
+  async function askHoli() {
+    const message = ask.trim();
+    if (!message || !user || aiBusy) return;
+    setAiBusy(true);
+    setAiReply('');
+    setAppError('');
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch('/api/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ message, history: chatHistory, tasks: tasks.map(({ title, subject, due, done }) => ({ title, subject, due, done })) }),
+      });
+      const data = await response.json() as { reply?: string; error?: string };
+      if (!response.ok) throw new Error(data.error || 'Holi AI could not respond right now.');
+      const reply = data.reply || 'I could not generate a reply. Please try again.';
+      setAiReply(reply);
+      setChatHistory((current) => [...current, { role: 'user', content: message }, { role: 'assistant', content: reply }].slice(-8));
+      setAsk('');
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'Holi AI could not respond right now.');
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  async function removeTask(task: Task) {
+    try {
+      await deleteDoc(doc(db, 'tasks', task.id));
+      setTasks((current) => current.filter((item) => item.id !== task.id));
+      setAppError('');
+    } catch {
+      setAppError('Could not delete that task. Please try again.');
+    }
   }
 
   if (authLoading || !user) return <main className="authShell"><section className="authCard"><div className="brand"><span className="brandMark">H</span><span>holiwork</span></div><p>Opening your workspace…</p></section></main>;
@@ -101,14 +114,15 @@ export default function Home() {
       </aside>
 
       <section className="content">
-        <header className="topbar"><div><p className="eyebrow">Monday, September 7</p><h1>Good morning, {user.displayName || 'there'}.</h1></div><div className="topActions"><button className="iconButton" aria-label="Notifications">♧</button><button className="askButton" onClick={() => document.getElementById('ai-input')?.focus()}>Ask Holi <span>⌘ K</span></button></div></header>
+        {appError && <div className="appError" role="alert">{appError}<button onClick={() => setAppError('')} aria-label="Dismiss error">×</button></div>}
+        <header className="topbar"><div><p className="eyebrow">{new Intl.DateTimeFormat('en', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())}</p><h1>Good day, {user.displayName || 'there'}.</h1></div><div className="topActions"><button className="iconButton" aria-label="Notifications">♧</button><button className="askButton" onClick={() => document.getElementById('ai-input')?.focus()}>Ask Holi <span>⌘ K</span></button></div></header>
 
         <div className="grid">
           <section className="hero card"><div className="heroCopy"><span className="pill">YOUR DAY</span><h2>Make today<br /><em>count.</em></h2><p>One place for your work, money, and everything in between.</p><div className="heroButtons"><button className="primary" onClick={() => setShowAdd(true)}>+ Add task</button><button className="secondary" onClick={() => setActive('Focus')}>Start focus →</button></div></div><div className="orb"><div className="orbInner">{progress}<small>% done</small></div></div></section>
 
-          <section className="card aiCard"><div className="sectionHead"><div><span className="pill dark">HOLI AI</span><h3>Your AI sidekick.</h3></div><span className="spark">✦</span></div><p className="aiHint">Ask anything about your work, schedule, or studies.</p><div className="suggestions"><button onClick={() => setAsk('Plan my evening')}>Plan my evening</button><button onClick={() => setAsk('Explain my hardest task')}>Explain a task</button></div><div className="aiInput"><input id="ai-input" value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && setAsk('')} placeholder="Ask Holi anything..." /><button onClick={() => setAsk('')}>↑</button></div></section>
+          <section className="card aiCard"><div className="sectionHead"><div><span className="pill dark">HOLI AI</span><h3>Your AI sidekick.</h3></div><span className="spark">✦</span></div><p className="aiHint">Ask anything about your work, schedule, or studies.</p><div className="suggestions"><button onClick={() => setAsk('Plan my evening')}>Plan my evening</button><button onClick={() => setAsk('Explain my hardest task')}>Explain a task</button></div><div className="aiInput"><input id="ai-input" value={ask} onChange={(e) => setAsk(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), void askHoli())} placeholder="Ask Holi anything..." aria-label="Ask Holi anything" /><button onClick={() => void askHoli()} disabled={aiBusy || !ask.trim()} aria-label="Send message">{aiBusy ? '…' : '↑'}</button></div>{aiReply && <p className="aiHint" role="status">{aiReply}</p>}</section>
 
-          <section className="card tasksCard"><div className="sectionHead"><div><span className="pill">TASKS</span><h3>On your plate</h3></div><button className="textButton" onClick={() => setShowAdd(true)}>+ Add →</button></div><div className="taskList">{loadingTasks ? <p className="muted">Loading your tasks…</p> : tasks.map((task) => <button className={task.done ? 'task done' : 'task'} key={task.id} onClick={() => toggleTask(task)}><span className="check">{task.done ? '✓' : ''}</span><span className="taskText"><strong>{task.title}</strong><small>{task.subject} · {task.due}</small></span></button>)}</div></section>
+          <section className="card tasksCard"><div className="sectionHead"><div><span className="pill">TASKS</span><h3>On your plate</h3></div><button className="textButton" onClick={() => setShowAdd(true)}>+ Add →</button></div><div className="taskList">{loadingTasks ? <p className="muted">Loading your tasks…</p> : tasks.length === 0 ? <p className="muted">No tasks yet. Add one to get started.</p> : tasks.map((task) => <div className="taskRow" key={task.id}><button className={task.done ? 'task done' : 'task'} onClick={() => void toggleTask(task)}><span className="check">{task.done ? '✓' : ''}</span><span className="taskText"><strong>{task.title}</strong><small>{task.subject} · {task.due}</small></span></button><button className="taskDelete" onClick={() => void removeTask(task)} aria-label={`Delete ${task.title}`}>×</button></div>)}</div></section>
 
           <section className="card moneyCard"><div className="sectionHead"><div><span className="pill">WALLET</span><h3>Money snapshot</h3></div><span className="dots">•••</span></div><div className="balance"><small>Available this week</small><strong>AED 420.00</strong></div><div className="moneyRow"><span>Spent</span><strong>AED 86.50</strong></div><div className="progress"><span style={{ width: '21%' }} /></div><p className="muted">21% of your weekly budget used</p></section>
 
