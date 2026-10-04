@@ -95,6 +95,8 @@ export default function Home() {
 
   const completed = useMemo(() => tasks.filter((task) => task.done).length, [tasks]);
   const progress = tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
+  const spentThisWeek = transactions.filter((item) => item.type === 'expense' && Date.now() - new Date(item.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000 && Date.now() >= new Date(item.createdAt).getTime()).reduce((sum, item) => sum + item.amount, 0);
+  const budgetProgress = weeklyBudget > 0 ? Math.min(100, (spentThisWeek / weeklyBudget) * 100) : 0;
 
   async function toggleTask(task: Task) {
     const nextDone = !task.done;
@@ -231,8 +233,8 @@ export default function Home() {
           <section className="card moneyCard" style={{ display: active === 'Today' || active === 'Wallet' ? undefined : 'none' }}>
             <div className="sectionHead"><div><span className="pill">WALLET</span><h3>Money snapshot</h3></div><button className="textButton" onClick={() => { setBudgetInput(String(weeklyBudget)); setShowBudgetEditor(true); }}>Set budget</button></div>
             <div className="balance"><small>Weekly budget</small><strong>AED {weeklyBudget.toFixed(2)}</strong></div>
-            <div className="moneyRow"><span>Spent this week</span><strong>AED {transactions.filter((item) => item.type === 'expense' && Date.now() - new Date(item.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000 && Date.now() >= new Date(item.createdAt).getTime()).reduce((sum, item) => sum + item.amount, 0).toFixed(2)}</strong></div>
-            <div className="progress"><span style={{ width: `${weeklyBudget > 0 ? Math.min(100, transactions.filter((item) => item.type === 'expense' && Date.now() - new Date(item.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000 && Date.now() >= new Date(item.createdAt).getTime()).reduce((sum, item) => sum + item.amount, 0) / weeklyBudget * 100 : 0}%` }} /></div>
+            <div className="moneyRow"><span>Spent in the last 7 days</span><strong>AED {spentThisWeek.toFixed(2)}</strong></div>
+            <div className="progress"><span style={{ width: `${budgetProgress}%` }} /></div>
             <p className="muted">{transactions.length ? `${transactions.length} wallet entr${transactions.length === 1 ? 'y' : 'ies'} saved` : 'No wallet entries yet. Add your first expense or income.'}</p>
             <button className="secondary" onClick={() => setShowAddExpense(true)}>+ Add entry</button>
           </section>
