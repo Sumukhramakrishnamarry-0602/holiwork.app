@@ -8,6 +8,8 @@ import { auth, db } from '@/lib/firebase';
 import { useAuth } from './auth-context';
 
 type Task = { id: string; title: string; subject: string; due: string; done: boolean; uid: string };
+type CalendarEvent = { id: string; title: string; startAt: string; location?: string; durationMinutes?: number; uid: string };
+type Transaction = { id: string; title: string; amount: number; category: string; type: 'income' | 'expense'; createdAt: string; uid: string };
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
 const navItems = ['Today', 'Homework', 'Wallet', 'Focus', 'Community'];
@@ -25,6 +27,20 @@ export default function Home() {
   const [aiReply, setAiReply] = useState('');
   const [aiBusy, setAiBusy] = useState(false);
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [weeklyBudget, setWeeklyBudget] = useState(0);
+  const [budgetInput, setBudgetInput] = useState('');
+  const [showBudgetEditor, setShowBudgetEditor] = useState(false);
+  const [showAddExpense, setShowAddExpense] = useState(false);
+  const [expenseTitle, setExpenseTitle] = useState('');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [expenseCategory, setExpenseCategory] = useState('Food');
+  const [expenseType, setExpenseType] = useState<'expense' | 'income'>('expense');
+  const [showAddEvent, setShowAddEvent] = useState(false);
+  const [eventTitle, setEventTitle] = useState('');
+  const [eventStartAt, setEventStartAt] = useState('');
+  const [eventLocation, setEventLocation] = useState('');
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login');
@@ -43,10 +59,28 @@ export default function Home() {
 
     async function loadTasks() {
       setLoadingTasks(true);
-      const snapshot = await getDocs(query(collection(db, 'tasks'), where('uid', '==', uid)));
+      const [taskResult, eventResult, transactionResult, budgetResult] = await Promise.allSettled([
+        getDocs(query(collection(db, 'tasks'), where('uid', '==', uid))),
+        getDocs(query(collection(db, 'events'), where('uid', '==', uid))),
+        getDocs(query(collection(db, 'transactions'), where('uid', '==', uid))),
+        getDocs(query(collection(db, 'budgets'), where('uid', '==', uid))),
+      ]);
       if (cancelled) return;
-      setTasks(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as Task)));
-      setAppError('');
+      if (taskResult.status === 'fulfilled') {
+        setTasks(taskResult.value.docs.map((item) => ({ id: item.id, ...item.data() } as Task)));
+      } else {
+        setAppError('Could not load tasks. Check your connection and Firebase rules.');
+      }
+      if (eventResult.status === 'fulfilled') {
+        setEvents(eventResult.value.docs.map((item) => ({ id: item.id, ...item.data() } as CalendarEvent)).sort((a, b) => a.startAt.localeCompare(b.startAt)));
+      }
+      if (transactionResult.status === 'fulfilled') {
+        setTransactions(transactionResult.value.docs.map((item) => ({ id: item.id, ...item.data() } as Transaction)));
+      }
+      if (budgetResult.status === 'fulfilled') {
+        const amounts = budgetResult.value.docs.map((item) => Number(item.data().weeklyAmount) || 0);
+        setWeeklyBudget(amounts[0] ?? 0);
+      }
       setLoadingTasks(false);
     }
 
@@ -110,6 +144,56 @@ export default function Home() {
     }
   }
 
+  async function addEvent() {
+    if (!eventTitle.trim() || !eventStartAt || !user) return;
+    const data = { title: eventTitle.trim(), startAt: new Date(eventStartAt).toISOString(), location: eventLocation.trim(), uid: user.uid };
+    try {
+      const created = await addDoc(collection(db, 'events'), data);
+      setEvents((current) => [...current, { id: created.id, ...data }].sort((a, b) => a.startAt.localeCompare(b.startAt)));
+      setEventTitle(''); setEventStartAt(''); setEventLocation(''); setShowAddEvent(false); setAppError('');
+    } catch {
+      setAppError('Could not save that event. Check that the latest Firestore rules are published.');
+    }
+  }
+
+  async function removeEvent(event: CalendarEvent) {
+    try {
+      await deleteDoc(doc(db, 'events', event.id));
+      setEvents((current) => current.filter((item) => item.id !== event.id));
+    } catch {
+      setAppError('Could not delete that event. Please try again.');
+    }
+  }
+
+  async function addTransaction() {
+    const amount = Number(expenseAmount);
+    if (!expenseTitle.trim() || !Number.isFinite(amount) || amount <= 0 || !user) return;
+    const data = { title: expenseTitle.trim(), amount, category: expenseCategory, type: expenseType, createdAt: new Date().toISOString(), uid: user.uid };
+    try {
+      const created = await addDoc(collection(db, 'transactions'), data);
+      setTransactions((current) => [...current, { id: created.id, ...data }]);
+      setExpenseTitle(''); setExpenseAmount(''); setShowAddExpense(false); setAppError('');
+    } catch {
+      setAppError('Could not save that wallet entry. Check that the latest Firestore rules are published.');
+    }
+  }
+
+  async function saveBudget() {
+    const amount = Number(budgetInput);
+    if (!Number.isFinite(amount) || amount < 0 || !user) return;
+    try {
+      const existing = await getDocs(query(collection(db, 'budgets'), where('uid', '==', user.uid)));
+      if (existing.empty) {
+        await addDoc(collection(db, 'budgets'), { weeklyAmount: amount, uid: user.uid });
+      } else {
+        await updateDoc(doc(db, 'budgets', existing.docs[0].id), { weeklyAmount: amount });
+      }
+      setWeeklyBudget(amount); setShowBudgetEditor(false); setAppError('');
+    } catch {
+      setAppError('Could not save your budget. Check that the latest Firestore rules are published.');
+    }
+  }
+
   async function removeTask(task: Task) {
     try {
       await deleteDoc(doc(db, 'tasks', task.id));
@@ -144,13 +228,28 @@ export default function Home() {
 
           <section className="card tasksCard"><div className="sectionHead"><div><span className="pill">TASKS</span><h3>On your plate</h3></div><button className="textButton" onClick={() => setShowAdd(true)}>+ Add →</button></div><div className="taskList">{loadingTasks ? <p className="muted">Loading your tasks…</p> : tasks.length === 0 ? <p className="muted">No tasks yet. Add one to get started.</p> : tasks.map((task) => <div className="taskRow" key={task.id}><button className={task.done ? 'task done' : 'task'} onClick={() => void toggleTask(task)}><span className="check">{task.done ? '✓' : ''}</span><span className="taskText"><strong>{task.title}</strong><small>{task.subject} · {task.due}</small></span></button><button className="taskDelete" onClick={() => void removeTask(task)} aria-label={`Delete ${task.title}`}>×</button></div>)}</div></section>
 
-          <section className="card moneyCard"><div className="sectionHead"><div><span className="pill">WALLET</span><h3>Money snapshot</h3></div><span className="dots">•••</span></div><div className="balance"><small>Available this week</small><strong>AED 420.00</strong></div><div className="moneyRow"><span>Spent</span><strong>AED 86.50</strong></div><div className="progress"><span style={{ width: '21%' }} /></div><p className="muted">21% of your weekly budget used</p></section>
+          <section className="card moneyCard">
+            <div className="sectionHead"><div><span className="pill">WALLET</span><h3>Money snapshot</h3></div><button className="textButton" onClick={() => { setBudgetInput(String(weeklyBudget)); setShowBudgetEditor(true); }}>Set budget</button></div>
+            <div className="balance"><small>Weekly budget</small><strong>AED {weeklyBudget.toFixed(2)}</strong></div>
+            <div className="moneyRow"><span>Spent this week</span><strong>AED {transactions.filter((item) => item.type === 'expense' && Date.now() - new Date(item.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000 && Date.now() >= new Date(item.createdAt).getTime()).reduce((sum, item) => sum + item.amount, 0).toFixed(2)}</strong></div>
+            <div className="progress"><span style={{ width: `${weeklyBudget > 0 ? Math.min(100, transactions.filter((item) => item.type === 'expense' && Date.now() - new Date(item.createdAt).getTime() < 7 * 24 * 60 * 60 * 1000 && Date.now() >= new Date(item.createdAt).getTime()).reduce((sum, item) => sum + item.amount, 0) / weeklyBudget * 100 : 0}%` }} /></div>
+            <p className="muted">{transactions.length ? `${transactions.length} wallet entr${transactions.length === 1 ? 'y' : 'ies'} saved` : 'No wallet entries yet. Add your first expense or income.'}</p>
+            <button className="secondary" onClick={() => setShowAddExpense(true)}>+ Add entry</button>
+          </section>
 
+          <section className="card scheduleCard">
+            <div className="sectionHead"><div><span className="pill">UP NEXT</span><h3>Your schedule</h3></div><button className="textButton" onClick={() => setShowAddEvent(true)}>+ Add event</button></div>
+            {events.filter((event) => Number.isFinite(new Date(event.startAt).getTime()) && new Date(event.startAt).getTime() >= Date.now()).slice(0, 4).map((event) => <div className="event" key={event.id}><div className="time">{new Date(event.startAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div><div className="eventLine" /><div className="eventDetails"><strong>{event.title}</strong><small>{event.location || 'No location added'}</small></div><button className="taskDelete" onClick={() => void removeEvent(event)} aria-label={`Delete ${event.title}`}>×</button></div>)}
+            {events.filter((event) => Number.isFinite(new Date(event.startAt).getTime()) && new Date(event.startAt).getTime() >= Date.now()).length === 0 && <p className="muted">Nothing scheduled yet. Add an event to see it here.</p>}
+          </section>
           <section className="card scheduleCard"><div className="sectionHead"><div><span className="pill">UP NEXT</span><h3>Your schedule</h3></div><button className="textButton">Calendar →</button></div><div className="event"><div className="time">04:00<small>PM</small></div><div className="eventLine" /><div><strong>Physics lecture</strong><small>Room B-204 · 60 min</small></div></div><div className="event"><div className="time">06:00<small>PM</small></div><div className="eventLine" /><div><strong>Deep work</strong><small>Thermodynamics · 90 min</small></div></div><div className="event"><div className="time">08:30<small>PM</small></div><div className="eventLine" /><div><strong>Free time</strong><small>No plans. You earned it.</small></div></div></section>
         </div>
         <footer><span>holiwork · one workspace for your whole life</span><span>⌘ K to ask Holi</span></footer>
       </section>
 
+      {showBudgetEditor && <div className="modalBackdrop" onClick={() => setShowBudgetEditor(false)}><div className="modal" onClick={(e) => e.stopPropagation()}><span className="pill">WEEKLY BUDGET</span><h3>Set your budget</h3><label>Amount in AED<input type="number" min="0" step="0.01" value={budgetInput} onChange={(e) => setBudgetInput(e.target.value)} placeholder="e.g. 300" /></label><div className="modalActions"><button className="secondary" onClick={() => setShowBudgetEditor(false)}>Cancel</button><button className="primary" onClick={() => void saveBudget()}>Save budget</button></div></div></div>}
+      {showAddExpense && <div className="modalBackdrop" onClick={() => setShowAddExpense(false)}><div className="modal" onClick={(e) => e.stopPropagation()}><span className="pill">WALLET ENTRY</span><h3>Add income or expense</h3><label>Description<input autoFocus value={expenseTitle} onChange={(e) => setExpenseTitle(e.target.value)} placeholder="e.g. Lunch" /></label><label>Amount in AED<input type="number" min="0.01" step="0.01" value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)} placeholder="e.g. 25" /></label><label>Type<select value={expenseType} onChange={(e) => setExpenseType(e.target.value as 'expense' | 'income')}><option value="expense">Expense</option><option value="income">Income</option></select></label><label>Category<select value={expenseCategory} onChange={(e) => setExpenseCategory(e.target.value)}><option>Food</option><option>Transport</option><option>Study</option><option>Shopping</option><option>Income</option><option>Other</option></select></label><div className="modalActions"><button className="secondary" onClick={() => setShowAddExpense(false)}>Cancel</button><button className="primary" onClick={() => void addTransaction()}>Save entry</button></div></div></div>}
+      {showAddEvent && <div className="modalBackdrop" onClick={() => setShowAddEvent(false)}><div className="modal" onClick={(e) => e.stopPropagation()}><span className="pill">CALENDAR EVENT</span><h3>Add to your schedule</h3><label>Event title<input autoFocus value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} placeholder="e.g. Project meeting" /></label><label>Date and time<input type="datetime-local" value={eventStartAt} onChange={(e) => setEventStartAt(e.target.value)} /></label><label>Location (optional)<input value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} placeholder="e.g. Library" /></label><div className="modalActions"><button className="secondary" onClick={() => setShowAddEvent(false)}>Cancel</button><button className="primary" onClick={() => void addEvent()}>Save event</button></div></div></div>}
       {showAdd && <div className="modalBackdrop" onClick={() => setShowAdd(false)}><div className="modal" onClick={(e) => e.stopPropagation()}><span className="pill">NEW TASK</span><h3>What needs doing?</h3><input autoFocus value={newTask} onChange={(e) => setNewTask(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && addTask()} placeholder="e.g. Finish project outline" /><div className="modalActions"><button className="secondary" onClick={() => setShowAdd(false)}>Cancel</button><button className="primary" onClick={addTask}>Add task</button></div></div></div>}
     </main>
   );
