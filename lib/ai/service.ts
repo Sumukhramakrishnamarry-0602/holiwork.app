@@ -21,7 +21,7 @@ export const aiService = {
     return postJSON<{ blocks: Array<{ type: "task" | "event"; id: string; title: string; start: string; end: string; reason?: string }>; unscheduled: unknown[]; summary: string; ai: AIPlanResponse }>("/api/ai/plan", input);
   },
   applyPlan(blocks: Array<{ taskId: string; start: string; end: string }>) {
-    return postJSON<{ success: boolean; createdBlocks: number }>("/api/ai/plan/apply", { blocks });
+    return postJSON<{ success: boolean; createdBlocks: number; skippedExisting: number }>("/api/ai/plan/apply", { blocks });
   },
   extractTask(input: { text: string; nowIso: string; timezone: string }) {
     return postJSON<{ title: string; description: string; dueDate: string; dueTime: string; priority: "Low" | "Medium" | "High"; category: string }>("/api/ai/extract-task", input);
