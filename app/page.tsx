@@ -20,7 +20,11 @@ export default function Home() {
   const [ask, setAsk] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [newTask, setNewTask] = useState('');
-  const [loadingTasks, setLoadingTasks] = useState(true);\n  const [appError, setAppError] = useState('');\n  const [aiReply, setAiReply] = useState('');\n  const [aiBusy, setAiBusy] = useState(false);\n  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(true);
+  const [appError, setAppError] = useState('');
+  const [aiReply, setAiReply] = useState('');
+  const [aiBusy, setAiBusy] = useState(false);
+  const [chatHistory, setChatHistory] = useState<ChatMessage[]>([]);
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login');
@@ -41,10 +45,17 @@ export default function Home() {
       setLoadingTasks(true);
       const snapshot = await getDocs(query(collection(db, 'tasks'), where('uid', '==', uid)));
       if (cancelled) return;
-      setTasks(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as Task)));\n      setAppError('');\n      setLoadingTasks(false);
+      setTasks(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as Task)));
+      setAppError('');
+      setLoadingTasks(false);
     }
 
-    loadTasks().catch(() => {\n      if (!cancelled) {\n        setLoadingTasks(false);\n        setAppError('Could not load your tasks. Check your connection and Firebase rules, then retry.');\n      }\n    });
+    loadTasks().catch(() => {
+      if (!cancelled) {
+        setLoadingTasks(false);
+        setAppError('Could not load your tasks. Check your connection and Firebase rules, then retry.');
+      }
+    });
     return () => { cancelled = true; };
   }, [user]);
 
@@ -55,13 +66,22 @@ export default function Home() {
     const nextDone = !task.done;
     setTasks((current) => current.map((item) => item.id === task.id ? { ...item, done: nextDone } : item));
     try { await updateDoc(doc(db, 'tasks', task.id), { done: nextDone }); }
-    catch {\n      setTasks((current) => current.map((item) => item.id === task.id ? { ...item, done: task.done } : item));\n      setAppError('Could not update that task. Please try again.');\n    }
+    catch {
+      setTasks((current) => current.map((item) => item.id === task.id ? { ...item, done: task.done } : item));
+      setAppError('Could not update that task. Please try again.');
+    }
   }
 
   async function addTask() {
     if (!newTask.trim() || !user) return;
     const data = { title: newTask.trim(), subject: 'Personal', due: 'Today', done: false, uid: user.uid };
-    try {\n      const created = await addDoc(collection(db, 'tasks'), data);\n      setTasks((current) => [...current, { id: created.id, ...data }]);\n      setNewTask(''); setShowAdd(false); setAppError('');\n    } catch {\n      setAppError('Could not save that task. Please try again.');\n    }
+    try {
+      const created = await addDoc(collection(db, 'tasks'), data);
+      setTasks((current) => [...current, { id: created.id, ...data }]);
+      setNewTask(''); setShowAdd(false); setAppError('');
+    } catch {
+      setAppError('Could not save that task. Please try again.');
+    }
   }
 
   async function askHoli() {
