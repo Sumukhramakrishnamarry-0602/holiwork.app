@@ -33,10 +33,9 @@ export default function Home() {
   }, [authLoading, user, router]);
 
   useEffect(() => {
-    // Narrow to a plain string before entering the async function. This avoids
-    // TypeScript retaining the nullable Firebase User type across the closure.
-    const uid = user?.uid;
-    if (!uid) {
+    // Keep the task owner ID explicitly typed as a string for Firestore and Task.
+    const uid: string = user?.uid ?? '';
+    if (uid.length === 0) {
       setLoadingTasks(false);
       setTasks([]);
       return;
@@ -51,7 +50,13 @@ export default function Home() {
       if (snapshot.empty) {
         const created = await Promise.all(starterTasks.map((task) => addDoc(collection(db, 'tasks'), { ...task, uid })));
         if (cancelled) return;
-        setTasks(created.map((item, index) => ({ id: item.id, ...starterTasks[index], uid })));
+        setTasks(created.map((item, index): Task => {
+          const starterTask = starterTasks[index];
+          if (!starterTask) {
+            throw new Error('A starter task is missing for a created task.');
+          }
+          return { id: item.id, title: starterTask.title, subject: starterTask.subject, due: starterTask.due, done: starterTask.done, uid };
+        }));
       } else {
         setTasks(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as Task)));
       }
