@@ -2,13 +2,13 @@
 
 import { aiService } from "@/lib/ai/service";
 import { currentTimezone } from "@/lib/utils/date";
-import type { TaskItem } from "@/lib/types";
-import { useState } from "react";
+import type { CalendarEvent, TaskItem } from "@/lib/types";
+import { useMemo, useState } from "react";
 
 interface Priority { taskId: string; reason: string }
 interface PlanBlock { type: "task" | "event"; id: string; title: string; start: string; end: string; reason?: string }
 
-export function AdaptivePlanCard({ tasks }: { tasks: TaskItem[] }) {
+export function AdaptivePlanCard({ tasks, events }: { tasks: TaskItem[]; events: CalendarEvent[] }) {
   const [goal, setGoal] = useState("");
   const [message, setMessage] = useState("");
   const [priorities, setPriorities] = useState<Priority[]>([]);
@@ -18,10 +18,30 @@ export function AdaptivePlanCard({ tasks }: { tasks: TaskItem[] }) {
   const [applied, setApplied] = useState(false);
   const [applyMessage, setApplyMessage] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [planSignature, setPlanSignature] = useState("");
   const taskById = new Map(tasks.map((task) => [task.id, task]));
+
+  const currentSignature = useMemo(() => JSON.stringify({
+    tasks: tasks.map((task) => ({
+      id: task.id,
+      completed: task.completed,
+      priority: task.priority,
+      dueDate: task.dueDate,
+      dueTime: task.dueTime,
+      title: task.title,
+    })).sort((a, b) => a.id.localeCompare(b.id)),
+    events: events.map((event) => ({
+      id: event.id,
+      startTime: event.startTime,
+      endTime: event.endTime,
+      title: event.title,
+    })).sort((a, b) => a.id.localeCompare(b.id)),
+  }), [tasks, events]);
+  const planIsStale = Boolean(planSignature && planSignature !== currentSignature);
 
   async function plan() {
     if (!goal.trim()) return;
+    const signatureAtRequest = currentSignature;
     setLoading(true);
     setError(null);
     setApplyMessage("");
@@ -35,6 +55,7 @@ export function AdaptivePlanCard({ tasks }: { tasks: TaskItem[] }) {
       setMessage(result.ai.message);
       setPriorities(result.ai.priorities);
       setBlocks(result.blocks as PlanBlock[]);
+      setPlanSignature(signatureAtRequest);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not build your plan.");
     } finally {
@@ -43,8 +64,12 @@ export function AdaptivePlanCard({ tasks }: { tasks: TaskItem[] }) {
   }
 
   async function applyPlan() {
+    if (planIsStale) {
+      setError("Your tasks or calendar changed. Re-plan before applying this schedule.");
+      return;
+    }
     const taskBlocks = blocks
-      .filter((block) => block.type === "task" && taskById.has(block.id))
+      .filter((block) => block.type === "task" && taskById.has(block.id) && !taskById.get(block.id)?.completed)
       .map((block) => ({ taskId: block.id, start: block.start, end: block.end }));
     if (!taskBlocks.length) return;
 
@@ -66,7 +91,7 @@ export function AdaptivePlanCard({ tasks }: { tasks: TaskItem[] }) {
     }
   }
 
-  const scheduledTaskBlocks = blocks.filter((block) => block.type === "task" && taskById.has(block.id));
+  const scheduledTaskBlocks = blocks.filter((block) => block.type === "task" && taskById.has(block.id) && !taskById.get(block.id)?.completed);
 
   return (
     <section className="card">
@@ -81,10 +106,15 @@ export function AdaptivePlanCard({ tasks }: { tasks: TaskItem[] }) {
           aria-label="Planning goal"
         />
         <button className="primary-btn" disabled={loading || !goal.trim()} onClick={() => void plan()}>
-          {loading ? "Planning..." : "Plan my day"}
+          {loading ? "Re-planning..." : blocks.length ? "Re-plan my day" : "Plan my day"}
         </button>
       </div>
       {error && <p className="status error" role="alert">{error}</p>}
+      {planIsStale && (
+        <p className="status" role="status">
+          Your tasks or calendar changed since this plan was created. Re-plan your day before applying it.
+        </p>
+      )}
       {message && <p>{message}</p>}
       {blocks.length > 0 && (
         <div>
@@ -103,10 +133,10 @@ export function AdaptivePlanCard({ tasks }: { tasks: TaskItem[] }) {
           <div className="row">
             <button
               className="primary-btn"
-              disabled={applying || applied || scheduledTaskBlocks.length === 0}
+              disabled={applying || applied || planIsStale || scheduledTaskBlocks.length === 0}
               onClick={() => void applyPlan()}
             >
-              {applied ? "Added to calendar" : applying ? "Adding..." : "Apply to calendar"}
+              {applied ? "Added to calendar" : applying ? "Adding..." : planIsStale ? "Re-plan to apply" : "Apply to calendar"}
             </button>
           </div>
           {applyMessage && <p className="status" role="status">{applyMessage}</p>}
