@@ -33,18 +33,25 @@ export default function Home() {
   }, [authLoading, user, router]);
 
   useEffect(() => {
-    const currentUser = user;
-    if (!currentUser) return;
+    // Narrow to a plain string before entering the async function. This avoids
+    // TypeScript retaining the nullable Firebase User type across the closure.
+    const uid = user?.uid;
+    if (!uid) {
+      setLoadingTasks(false);
+      setTasks([]);
+      return;
+    }
+
     let cancelled = false;
 
     async function loadTasks() {
       setLoadingTasks(true);
-      const snapshot = await getDocs(query(collection(db, 'tasks'), where('uid', '==', currentUser.uid)));
+      const snapshot = await getDocs(query(collection(db, 'tasks'), where('uid', '==', uid)));
       if (cancelled) return;
       if (snapshot.empty) {
-        const created = await Promise.all(starterTasks.map((task) => addDoc(collection(db, 'tasks'), { ...task, uid: currentUser.uid })));
+        const created = await Promise.all(starterTasks.map((task) => addDoc(collection(db, 'tasks'), { ...task, uid })));
         if (cancelled) return;
-        setTasks(created.map((item, index) => ({ id: item.id, ...starterTasks[index], uid: currentUser.uid })));
+        setTasks(created.map((item, index) => ({ id: item.id, ...starterTasks[index], uid })));
       } else {
         setTasks(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as Task)));
       }
