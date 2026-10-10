@@ -146,7 +146,11 @@ export default function Home() {
       if (!response.ok) throw new Error(data.error || 'Holi AI could not respond right now.');
       const reply = data.reply || 'I could not generate a reply. Please try again.';
       setAiReply(reply);
-      setChatHistory((current): ChatMessage[] => [...current, { role: 'user', content: message }, { role: 'assistant', content: reply }].slice(-8));
+      setChatHistory((current): ChatMessage[] => [
+        ...current,
+        { role: 'user' as const, content: message },
+        { role: 'assistant' as const, content: reply },
+      ].slice(-8));
       setAsk('');
     } catch (error) {
       setAppError(error instanceof Error ? error.message : 'Holi AI could not respond right now.');
