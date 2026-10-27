@@ -2,19 +2,60 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /tasks/{taskId} {
-      allow create: if request.auth != null
-        && request.resource.data.uid == request.auth.uid;
+    function signedIn() {
+      return request.auth != null;
+    }
 
-      allow read: if request.auth != null
-        && resource.data.uid == request.auth.uid;
+    function ownsResource() {
+      return signedIn() && resource.data.uid == request.auth.uid;
+    }
 
-      allow update: if request.auth != null
+    function createsOwnResource() {
+      return signedIn() && request.resource.data.uid == request.auth.uid;
+    }
+
+    function keepsOwnership() {
+      return signedIn()
         && resource.data.uid == request.auth.uid
         && request.resource.data.uid == request.auth.uid;
+    }
 
-      allow delete: if request.auth != null
-        && resource.data.uid == request.auth.uid;
+    // Every user-owned document must carry the authenticated user's UID.
+    // Keep each collection explicitly listed; do not add a broad catch-all rule.
+    match /tasks/{taskId} {
+      allow create: if createsOwnResource();
+      allow read, delete: if ownsResource();
+      allow update: if keepsOwnership();
+    }
+
+    match /events/{eventId} {
+      allow create: if createsOwnResource();
+      allow read, delete: if ownsResource();
+      allow update: if keepsOwnership();
+    }
+
+    match /reminders/{reminderId} {
+      allow create: if createsOwnResource();
+      allow read, delete: if ownsResource();
+      allow update: if keepsOwnership();
+    }
+
+    match /budgets/{budgetId} {
+      allow create: if createsOwnResource();
+      allow read, delete: if ownsResource();
+      allow update: if keepsOwnership();
+    }
+
+    match /transactions/{transactionId} {
+      allow create: if createsOwnResource();
+      allow read, delete: if ownsResource();
+      allow update: if keepsOwnership();
+    }
+
+    match /focusSessions/{sessionId} {
+      allow create: if createsOwnResource();
+      allow read, delete: if ownsResource();
+      allow update: if keepsOwnership();
     }
   }
 }

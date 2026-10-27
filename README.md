@@ -1,36 +1,33 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Holiwork
 
-## Getting Started
+Holiwork is a Next.js workspace with Firebase Authentication, Firestore-backed tasks, and an optional server-side AI assistant.
 
-First, run the development server:
+## Local development
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. Install dependencies with `npm ci`.
+2. Copy `.env.example` to `.env.local` and fill in your Firebase web app configuration.
+3. Add an `AI_API_KEY` for the server-side AI chat route. The key must remain server-side; do not prefix it with `NEXT_PUBLIC_`.
+4. Start the app with `npm run dev`.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Environment variables
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
+- `AI_API_KEY` (server-only; required for Holi AI)
+- `AI_MODEL` (optional; defaults to `gpt-4o-mini`)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Configure the same values in the Vercel project's Environment Variables settings for the environments you use, then redeploy.
 
-## Learn More
+## Firestore security rules
 
-To learn more about Next.js, take a look at the following resources:
+The repository's `firestore.rules` file scopes tasks, events, reminders, budgets, transactions, and focus sessions to the authenticated owner UID. Updating this file in GitHub does **not** publish the rules to Firebase automatically. Review and publish the rules in Firebase Console → Firestore Database → Rules before relying on collections beyond tasks.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Each user-owned document must include `uid` equal to the signed-in Firebase user's UID. Do not add broad public read/write rules.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## AI chat
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The `/api/ai/chat` endpoint verifies the Firebase ID token with Firebase Authentication before calling the configured AI provider. It is advice-only: it does not create or edit Firestore records. The AI key is only read by the server route.
