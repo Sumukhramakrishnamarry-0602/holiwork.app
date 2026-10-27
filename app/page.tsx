@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { addDoc, collection, deleteDoc, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
-import { signOut } from 'firebase/auth';
+import { EmailAuthProvider, reauthenticateWithCredential, deleteUser, signOut } from 'firebase/auth';
+import { writeBatch } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
 import { useAuth } from './auth-context';
 
@@ -61,6 +62,9 @@ export default function Home() {
   const [eventTitle, setEventTitle] = useState('');
   const [eventStartAt, setEventStartAt] = useState('');
   const [eventLocation, setEventLocation] = useState('');
+  const [showDeleteAccount, setShowDeleteAccount] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) router.replace('/login');
@@ -250,6 +254,47 @@ export default function Home() {
     }
   }
 
+
+  async function deleteMyAccount() {
+    if (!user || !user.email || !deletePassword || deletingAccount) return;
+    const confirmed = window.confirm('This permanently deletes your Holiwork account and its saved tasks, events, reminders, budgets, and wallet entries. This cannot be undone. Continue?');
+    if (!confirmed) return;
+    setDeletingAccount(true);
+    setAppError('');
+    try {
+      const credential = EmailAuthProvider.credential(user.email, deletePassword);
+      await reauthenticateWithCredential(user, credential);
+
+      // Delete only documents explicitly owned by this signed-in UID.
+      const ownedCollections = ['tasks', 'events', 'reminders', 'budgets', 'transactions', 'focusSessions'];
+      for (const collectionName of ownedCollections) {
+        while (true) {
+          const owned = await getDocs(query(collection(db, collectionName), where('uid', '==', user.uid)));
+          if (owned.empty) break;
+          const batch = writeBatch(db);
+          owned.docs.slice(0, 400).forEach((item) => batch.delete(item.ref));
+          await batch.commit();
+          if (owned.size <= 400) break;
+        }
+      }
+
+      await deleteUser(user);
+      setShowDeleteAccount(false);
+      setDeletePassword('');
+      router.replace('/login');
+    } catch (error) {
+      const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+      const message = code === 'auth/wrong-password' || code === 'auth/invalid-credential'
+        ? 'That password was not accepted. Your account was not deleted.'
+        : code === 'auth/requires-recent-login'
+          ? 'For security, log out and log back in, then try again.'
+          : 'Could not fully delete the account. Please try again; if some data was already deleted, it may be gone even though the login remains.';
+      setAppError(message);
+    } finally {
+      setDeletingAccount(false);
+    }
+  }
+
   async function removeTask(task: Task) {
     try {
       await deleteDoc(doc(db, 'tasks', task.id));
@@ -301,11 +346,13 @@ export default function Home() {
           {active === 'Reminders' && <section className="card tasksCard"><div className="sectionHead"><div><span className="pill">REMINDERS</span><h3>Things to remember</h3></div><button className="textButton" onClick={() => setShowAddReminder(true)}>+ Add reminder</button></div><div className="taskList">{reminders.length === 0 ? <p className="muted">No reminders yet. Add one to keep something on your radar.</p> : reminders.map((reminder) => <div className="taskRow" key={reminder.id}><button className={reminder.done ? 'task done' : 'task'} onClick={() => void toggleReminder(reminder)}><span className="check">{reminder.done ? '✓' : ''}</span><span className="taskText"><strong>{reminder.title}</strong><small>{new Date(reminder.dueAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</small></span></button><button className="taskDelete" onClick={() => void removeReminder(reminder)} aria-label={`Delete ${reminder.title}`}>×</button></div>)}</div></section>}
           {active === 'Focus' && <section className="card communityCard focusPage"><span className="pill">FOCUS MODE</span><h3>Make space for deep work.</h3><p className="muted">Use Holi AI to break a task into smaller steps, then start a focused work session without distractions.</p><div className="focusActions"><button className="primary" onClick={() => { setActive('Homework'); }}>Choose a task</button><button className="secondary" onClick={() => { setActive('Today'); document.getElementById('ai-input')?.focus(); }}>Plan with Holi AI</button></div><div className="focusTip"><span className="focusTipIcon"><NavIcon name="Focus" /></span><div><strong>One thing at a time</strong><p className="muted">Pick one task, define the next small step, and give it your full attention.</p></div></div></section>}
           {active === 'Community' && <section className="card communityCard"><span className="pill">COMMUNITY</span><h3>Your community space is coming next.</h3><p className="muted">The community area is being prepared. Your personal workspace features are ready to use from the sidebar.</p></section>}
-          {active === 'Settings' && <section className="card communityCard"><span className="pill">PREFERENCES</span><h3>Your workspace settings</h3><p className="muted">Signed in as {user.email || 'your account'}.</p><div className="settingsRow"><div><strong>Account</strong><small>Manage your current session</small></div><button className="secondary" onClick={() => void signOut(auth).then(() => router.replace('/login'))}>Log out</button></div><div className="settingsRow"><div><strong>Personal data</strong><small>Your tasks, reminders, schedule and wallet entries are stored under your account.</small></div></div></section>}
+          {active === 'Settings' && <section className="card communityCard"><span className="pill">PREFERENCES</span><h3>Your workspace settings</h3><p className="muted">Signed in as {user.email || 'your account'}.</p><div className="settingsRow"><div><strong>Account</strong><small>Manage your current session</small></div><button className="secondary" onClick={() => void signOut(auth).then(() => router.replace('/login'))}>Log out</button></div><div className="settingsRow"><div><strong>Personal data</strong><small>Your tasks, reminders, schedule and wallet entries are stored under your account.</small></div></div>
+          <div className="settingsRow dangerZone"><div><strong>Delete account permanently</strong><small>Removes your login and saved personal workspace data. This cannot be undone.</small></div><button className="secondary" onClick={() => { setDeletePassword(''); setShowDeleteAccount(true); }}>Delete account</button></div></section>}
         </div>
         <footer><span>holiwork · one workspace for your whole life</span><span>⌘ K to ask Holi</span></footer>
       </section>
 
+      {showDeleteAccount && <div className="modalBackdrop" onClick={() => !deletingAccount && setShowDeleteAccount(false)}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="delete-account-title" onClick={(e) => e.stopPropagation()}><span className="pill">PERMANENT ACTION</span><h3 id="delete-account-title">Delete your Holiwork account?</h3><p className="muted">Enter your current password to verify it is you. Your account and personal app data will be deleted. This cannot be undone.</p><label>Confirm password<input type="password" autoComplete="current-password" value={deletePassword} onChange={(e) => setDeletePassword(e.target.value)} /></label><div className="modalActions"><button className="secondary" disabled={deletingAccount} onClick={() => setShowDeleteAccount(false)}>Cancel</button><button className="primary" disabled={deletingAccount || !deletePassword} onClick={() => void deleteMyAccount()}>{deletingAccount ? 'Deleting…' : 'Permanently delete'}</button></div></div></div>}
       {showBudgetEditor && <div className="modalBackdrop" onClick={() => setShowBudgetEditor(false)}><div className="modal" onClick={(e) => e.stopPropagation()}><span className="pill">WEEKLY BUDGET</span><h3>Set your budget</h3><label>Amount in AED<input type="number" min="0" step="0.01" value={budgetInput} onChange={(e) => setBudgetInput(e.target.value)} placeholder="e.g. 300" /></label><div className="modalActions"><button className="secondary" onClick={() => setShowBudgetEditor(false)}>Cancel</button><button className="primary" onClick={() => void saveBudget()}>Save budget</button></div></div></div>}
       {showAddExpense && <div className="modalBackdrop" onClick={() => setShowAddExpense(false)}><div className="modal" onClick={(e) => e.stopPropagation()}><span className="pill">WALLET ENTRY</span><h3>Add income or expense</h3><label>Description<input autoFocus value={expenseTitle} onChange={(e) => setExpenseTitle(e.target.value)} placeholder="e.g. Lunch" /></label><label>Amount in AED<input type="number" min="0.01" step="0.01" value={expenseAmount} onChange={(e) => setExpenseAmount(e.target.value)} placeholder="e.g. 25" /></label><label>Type<select value={expenseType} onChange={(e) => setExpenseType(e.target.value as 'expense' | 'income')}><option value="expense">Expense</option><option value="income">Income</option></select></label><label>Category<select value={expenseCategory} onChange={(e) => setExpenseCategory(e.target.value)}><option>Food</option><option>Transport</option><option>Study</option><option>Shopping</option><option>Income</option><option>Other</option></select></label><div className="modalActions"><button className="secondary" onClick={() => setShowAddExpense(false)}>Cancel</button><button className="primary" onClick={() => void addTransaction()}>Save entry</button></div></div></div>}
       {showAddEvent && <div className="modalBackdrop" onClick={() => setShowAddEvent(false)}><div className="modal" onClick={(e) => e.stopPropagation()}><span className="pill">CALENDAR EVENT</span><h3>Add to your schedule</h3><label>Event title<input autoFocus value={eventTitle} onChange={(e) => setEventTitle(e.target.value)} placeholder="e.g. Project meeting" /></label><label>Date and time<input type="datetime-local" value={eventStartAt} onChange={(e) => setEventStartAt(e.target.value)} /></label><label>Location (optional)<input value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} placeholder="e.g. Library" /></label><div className="modalActions"><button className="secondary" onClick={() => setShowAddEvent(false)}>Cancel</button><button className="primary" onClick={() => void addEvent()}>Save event</button></div></div></div>}
