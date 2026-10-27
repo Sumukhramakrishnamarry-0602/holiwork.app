@@ -13,7 +13,22 @@ type Reminder = { id: string; title: string; dueAt: string; notes?: string; done
 type Transaction = { id: string; title: string; amount: number; category: string; type: 'income' | 'expense'; createdAt: string; uid: string };
 type ChatMessage = { role: 'user' | 'assistant'; content: string };
 
-const navItems = ['Today', 'Homework', 'Wallet', 'Reminders', 'Focus', 'Community'];
+const navItems = ['Today', 'Homework', 'Calendar', 'Wallet', 'Reminders', 'Focus', 'Community', 'Settings'];
+
+const navIconPaths: Record<string, string> = {
+  Today: 'M3 10.5 12 3l9 7.5M5.5 9v11h13V9M9 20v-6h6v6',
+  Homework: 'M7 3h10a2 2 0 0 1 2 2v16H5V5a2 2 0 0 1 2-2ZM8 8h8M8 12h8M8 16h5',
+  Calendar: 'M5 4v3M19 4v3M4 8h16M5 5h14a1 1 0 0 1 1 1v13H4V6a1 1 0 0 1 1-1ZM8 12h2M14 12h2M8 16h2',
+  Wallet: 'M4 6.5h15a2 2 0 0 1 2 2v10H5a2 2 0 0 1-2-2V6a3 3 0 0 1 3-3h12M15 12h6',
+  Reminders: 'M18 9a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4',
+  Focus: 'M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z',
+  Community: 'M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M10 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM20 8v6M23 11h-6',
+  Settings: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.7 2.9-.2-.1a1.7 1.7 0 0 0-1.9.3l-.1.1h-3.4l-.1-.2a1.7 1.7 0 0 0-1.7-1.1 1.7 1.7 0 0 0-1.2.5l-.1.1-2.9-1.7.1-.2a1.7 1.7 0 0 0-.3-1.9l-.1-.1v-3.4l.2-.1a1.7 1.7 0 0 0 1.1-1.7 1.7 1.7 0 0 0-.5-1.2l-.1-.1 1.7-2.9.2.1a1.7 1.7 0 0 0 1.9-.3l.1-.1h3.4l.1.2a1.7 1.7 0 0 0 1.7 1.1 1.7 1.7 0 0 0 1.2-.5l.1-.1 2.9 1.7-.1.2a1.7 1.7 0 0 0 .3 1.9l.1.1v3.4Z'
+};
+
+function NavIcon({ name }: { name: string }) {
+  return <svg className="navIcon" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d={navIconPaths[name] || navIconPaths.Today} /></svg>;
+}
 
 export default function Home() {
   const router = useRouter();
@@ -251,16 +266,16 @@ export default function Home() {
     <main className="shell">
       <aside className="sidebar">
         <div className="brand"><span className="brandMark">H</span><span>holiwork</span></div>
-        <nav>{navItems.map((item, index) => <button key={item} className={active === item ? 'navItem active' : 'navItem'} onClick={() => setActive(item)}><span className="navIcon">{['⌂', '□', '◒', '◷', '◉', '♧'][index]}</span>{item}</button>)}</nav>
+        <nav aria-label="Main navigation">{navItems.map((item) => <button key={item} type="button" aria-current={active === item ? 'page' : undefined} className={active === item ? 'navItem active' : 'navItem'} onClick={() => setActive(item)}><NavIcon name={item} /><span className="navLabel">{item}</span></button>)}</nav>
         <div className="sidebarBottom">
-          <button className="navItem"><span className="navIcon">⚙</span>Settings</button>
+          <button type="button" className={active === 'Settings' ? 'navItem active' : 'navItem'} onClick={() => setActive('Settings')}><NavIcon name="Settings" /><span className="navLabel">Settings</span></button>
           <div className="profile"><div className="avatar">{(user.displayName || user.email || 'S').charAt(0).toUpperCase()}</div><div><strong>{user.displayName || 'Student'}</strong><small>{user.email}</small></div><button className="logoutButton" onClick={() => signOut(auth)}>Log out</button></div>
         </div>
       </aside>
 
       <section className="content">
         {appError && <div className="appError" role="alert">{appError}<button onClick={() => setAppError('')} aria-label="Dismiss error">×</button></div>}
-        <header className="topbar"><div><p className="eyebrow">{new Intl.DateTimeFormat('en', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())}</p><h1>Good day, {user.displayName || 'there'}.</h1></div><div className="topActions"><button className="iconButton" aria-label="Notifications">♧</button><button className="askButton" onClick={() => document.getElementById('ai-input')?.focus()}>Ask Holi <span>⌘ K</span></button></div></header>
+        <header className="topbar"><div><p className="eyebrow">{new Intl.DateTimeFormat('en', { weekday: 'long', month: 'long', day: 'numeric' }).format(new Date())}</p><h1>{active === 'Today' ? `Good day, ${user.displayName || 'there'}.` : active}</h1></div><div className="topActions"><button className="iconButton" aria-label="Notifications">♧</button><button className="askButton" onClick={() => document.getElementById('ai-input')?.focus()}>Ask Holi <span>⌘ K</span></button></div></header>
 
         <div className="grid">
           <section className="hero card" style={{ display: active === 'Today' ? undefined : 'none' }}><div className="heroCopy"><span className="pill">YOUR DAY</span><h2>Make today<br /><em>count.</em></h2><p>One place for your work, money, and everything in between.</p><div className="heroButtons"><button className="primary" onClick={() => setShowAdd(true)}>+ Add task</button><button className="secondary" onClick={() => setActive('Focus')}>Start focus →</button></div></div><div className="orb"><div className="orbInner">{progress}<small>% done</small></div></div></section>
@@ -278,13 +293,15 @@ export default function Home() {
             <button className="secondary" onClick={() => setShowAddExpense(true)}>+ Add entry</button>
           </section>
 
-          <section className="card scheduleCard" style={{ display: active === 'Today' || active === 'Focus' ? undefined : 'none' }}>
+          <section className="card scheduleCard" style={{ display: active === 'Today' || active === 'Calendar' ? undefined : 'none' }}>
             <div className="sectionHead"><div><span className="pill">UP NEXT</span><h3>Your schedule</h3></div><button className="textButton" onClick={() => setShowAddEvent(true)}>+ Add event</button></div>
             {events.filter((event) => Number.isFinite(new Date(event.startAt).getTime()) && new Date(event.startAt).getTime() >= Date.now()).slice(0, 4).map((event) => <div className="event" key={event.id}><div className="time">{new Date(event.startAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div><div className="eventLine" /><div className="eventDetails"><strong>{event.title}</strong><small>{event.location || 'No location added'}</small></div><button className="taskDelete" onClick={() => void removeEvent(event)} aria-label={`Delete ${event.title}`}>×</button></div>)}
             {events.filter((event) => Number.isFinite(new Date(event.startAt).getTime()) && new Date(event.startAt).getTime() >= Date.now()).length === 0 && <p className="muted">Nothing scheduled yet. Add an event to see it here.</p>}
           </section>
           {active === 'Reminders' && <section className="card tasksCard"><div className="sectionHead"><div><span className="pill">REMINDERS</span><h3>Things to remember</h3></div><button className="textButton" onClick={() => setShowAddReminder(true)}>+ Add reminder</button></div><div className="taskList">{reminders.length === 0 ? <p className="muted">No reminders yet. Add one to keep something on your radar.</p> : reminders.map((reminder) => <div className="taskRow" key={reminder.id}><button className={reminder.done ? 'task done' : 'task'} onClick={() => void toggleReminder(reminder)}><span className="check">{reminder.done ? '✓' : ''}</span><span className="taskText"><strong>{reminder.title}</strong><small>{new Date(reminder.dueAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</small></span></button><button className="taskDelete" onClick={() => void removeReminder(reminder)} aria-label={`Delete ${reminder.title}`}>×</button></div>)}</div></section>}
-          {active === 'Community' && <section className="card communityCard"><span className="pill">COMMUNITY</span><h3>Your community space is coming next.</h3><p className="muted">We are finishing the core workspace first. Your tasks, wallet and schedule are available from the sidebar.</p></section>}
+          {active === 'Focus' && <section className="card communityCard focusPage"><span className="pill">FOCUS MODE</span><h3>Make space for deep work.</h3><p className="muted">Use Holi AI to break a task into smaller steps, then start a focused work session without distractions.</p><div className="focusActions"><button className="primary" onClick={() => { setActive('Homework'); }}>Choose a task</button><button className="secondary" onClick={() => { setActive('Today'); document.getElementById('ai-input')?.focus(); }}>Plan with Holi AI</button></div><div className="focusTip"><span className="focusTipIcon"><NavIcon name="Focus" /></span><div><strong>One thing at a time</strong><p className="muted">Pick one task, define the next small step, and give it your full attention.</p></div></div></section>}
+          {active === 'Community' && <section className="card communityCard"><span className="pill">COMMUNITY</span><h3>Your community space is coming next.</h3><p className="muted">The community area is being prepared. Your personal workspace features are ready to use from the sidebar.</p></section>}
+          {active === 'Settings' && <section className="card communityCard"><span className="pill">PREFERENCES</span><h3>Your workspace settings</h3><p className="muted">Signed in as {user.email || 'your account'}.</p><div className="settingsRow"><div><strong>Account</strong><small>Manage your current session</small></div><button className="secondary" onClick={() => void signOut(auth).then(() => router.replace('/login'))}>Log out</button></div><div className="settingsRow"><div><strong>Personal data</strong><small>Your tasks, reminders, schedule and wallet entries are stored under your account.</small></div></div></section>}
         </div>
         <footer><span>holiwork · one workspace for your whole life</span><span>⌘ K to ask Holi</span></footer>
       </section>
