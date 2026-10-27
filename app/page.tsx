@@ -268,7 +268,7 @@ export default function Home() {
         <div className="brand"><span className="brandMark">H</span><span>holiwork</span></div>
         <nav aria-label="Main navigation">{navItems.map((item) => <button key={item} type="button" aria-current={active === item ? 'page' : undefined} className={active === item ? 'navItem active' : 'navItem'} onClick={() => setActive(item)}><NavIcon name={item} /><span className="navLabel">{item}</span></button>)}</nav>
         <div className="sidebarBottom">
-          <button type="button" className={active === 'Settings' ? 'navItem active' : 'navItem'} onClick={() => setActive('Settings')}><NavIcon name="Settings" /><span className="navLabel">Settings</span></button>
+          
           <div className="profile"><div className="avatar">{(user.displayName || user.email || 'S').charAt(0).toUpperCase()}</div><div><strong>{user.displayName || 'Student'}</strong><small>{user.email}</small></div><button className="logoutButton" onClick={() => signOut(auth)}>Log out</button></div>
         </div>
       </aside>
